@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+polars
+pydantic
+pydantic-settings
+sqlalchemy
+# Using SQLite for local development since Docker is not available
+# psycopg2-binary
+boto3
+python-multipart
+matplotlib
+seaborn
+pyarrow
+openai
+google-genai

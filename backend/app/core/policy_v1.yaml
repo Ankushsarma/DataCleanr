@@ -1,0 +1,83 @@
+# AutoCleanAI Policy Configuration v1.0
+# This file is the single source of truth for all data cleaning rules.
+
+global_constraints:
+  row_retention:
+    min_retention_pct: 90.0
+  sensitive_columns:
+    restricted_transformations_require_approval: true
+
+operations:
+  KEEP:
+    max_risk: LOW
+    max_modification_pct: 0.0
+
+  FLAG:
+    max_risk: LOW
+    max_modification_pct: 0.0
+
+  IMPUTE_MEAN:
+    max_risk: MEDIUM
+    max_modification_pct: 15.0
+
+  IMPUTE_MEDIAN:
+    max_risk: MEDIUM
+    max_modification_pct: 15.0
+
+  IMPUTE_CONSTANT:
+    max_risk: MEDIUM
+    max_modification_pct: 100.0
+
+  IMPUTE_KNN:
+    max_risk: MEDIUM
+    max_modification_pct: 100.0
+
+  IMPUTE_MODE:
+    max_risk: MEDIUM
+    max_modification_pct: 15.0
+
+  IMPUTE_GROUPWISE_MEAN:
+    max_risk: MEDIUM
+    max_modification_pct: 15.0
+    requires_min_group_size: 5
+
+  IMPUTE_GROUPWISE_MEDIAN:
+    max_risk: MEDIUM
+    max_modification_pct: 15.0
+    requires_min_group_size: 5
+
+  DROP_ROWS_EXACT_DUPLICATE:
+    max_risk: LOW
+    requires_hash_match: true
+
+  DROP_ROWS_PREDICATE:
+    max_risk: HIGH
+    max_modification_pct: 20.0  # Increased per user request to allow removing outliers
+
+  NORMALIZE_CATEGORICAL:
+    max_risk: MEDIUM
+    max_modification_pct: 100.0
+
+  TRIM_WHITESPACE:
+    max_risk: LOW
+    max_modification_pct: 100.0
+
+  CAST_TYPE:
+    max_risk: MEDIUM
+    max_modification_pct: 100.0
+
+  CLIP_OUTLIERS:
+    max_risk: MEDIUM
+    max_modification_pct: 5.0
+
+  WINSORIZE:
+    max_risk: MEDIUM
+    max_modification_pct: 5.0
+
+  STANDARDIZE_DATE_FORMAT:
+    max_risk: LOW
+    max_modification_pct: 100.0
+
+  REGEX_REPLACE:
+    max_risk: HIGH
+    max_modification_pct: 100.0

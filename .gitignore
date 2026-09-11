@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Local Storage
+backend/local_storage/
+backend/llm_response_error.txt
+
+# OS
+.DS_Store
+
+# Data files
+*.csv
