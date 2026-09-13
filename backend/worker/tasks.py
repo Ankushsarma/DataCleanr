@@ -3,6 +3,16 @@ from typing import Callable, Any
 import json
 import uuid
 
+def log_to_db(db, job_id, message):
+    from app.db.models import JobLog
+    print(message)
+    if job_id and db:
+        try:
+            db.add(JobLog(job_id=job_id, message=message))
+            db.commit()
+        except Exception as e:
+            print(f"Failed to save log: {e}")
+
 # A simple local executor for background tasks without Celery/Redis
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
 
@@ -79,7 +89,7 @@ def task_profile_dataset(dataset_id: str, file_path: str):
             db.commit()
             
             # --- RULE-BASED STRATEGY SELECTION ---
-            print(f"[Rule Engine] Resolving strategy for '{di.column}' ({di.issue_type})...")
+            log_to_db(db, job_id, f"[Rule Engine] Resolving strategy for '{di.column}' ({di.issue_type})...")
             
             candidate_irs = RuleBasedStrategyEngine.resolve(
                 issue_id=issue.issue_id,
@@ -95,9 +105,9 @@ def task_profile_dataset(dataset_id: str, file_path: str):
             for c in candidates:
                 policy_result = policy_engine.evaluate(c.ir, profiler_output)
                 if not policy_result.eligible:
-                    print(f"  Policy Engine rejected {c.ir.operation.value}: {policy_result.violations}")
+                    log_to_db(db, job_id, f"  Policy Engine rejected {c.ir.operation.value}: {policy_result.violations}")
                 else:
-                    print(f"  Policy Engine approved {c.ir.operation.value}.")
+                    log_to_db(db, job_id, f"  Policy Engine approved {c.ir.operation.value}.")
                     
                 candidate_record = CandidateModel(
                     candidate_id=str(uuid.uuid4()),
@@ -114,7 +124,7 @@ def task_profile_dataset(dataset_id: str, file_path: str):
                 
             # --- CONTROL TRACK: Selection Engine ---
             selection_result = SelectionEngine.select(candidate_models)
-            print(f"  Selection: {selection_result.decision} → {selection_result.selected_candidate.strategy if selection_result.selected_candidate else 'None'}")
+            log_to_db(db, job_id, f"  Selection: {selection_result.decision} → {selection_result.selected_candidate.strategy if selection_result.selected_candidate else 'None'}")
             
             if selection_result.selected_candidate:
                 winning_ir = next((c.ir for c in candidates if c.ir.operation.value == selection_result.selected_candidate.strategy), None)
@@ -129,10 +139,10 @@ def task_profile_dataset(dataset_id: str, file_path: str):
         has_high_risk = any(ir.risk_level == 'HIGH' for ir in selected_irs)
         
         if selected_irs and has_high_risk:
-            print("HIGH risk operations detected. Pausing for human approval.")
+            log_to_db(db, job_id, "HIGH risk operations detected. Pausing for human approval.")
             job.state = "PENDING_APPROVAL"
         elif any(c.selected for c in db.query(CandidateModel).join(Issue).filter(Issue.job_id == job_id).all()):
-            print("Only LOW/MEDIUM risk operations detected. Proceeding to execution (Autonomous Mode)...")
+            log_to_db(db, job_id, "Only LOW/MEDIUM risk operations detected. Proceeding to execution (Autonomous Mode)...")
             job.state = "EXECUTING"
             db.commit()
             
@@ -143,31 +153,32 @@ def task_profile_dataset(dataset_id: str, file_path: str):
             validation_passed = False
             
             while retry_count <= max_retries:
-                print(f"Executing approved AI strategies (Attempt {retry_count + 1})...")
+                log_to_db(db, job_id, f"Executing approved AI strategies (Attempt {retry_count + 1})...")
                 output_file = SandboxExecutor.execute(dataset_id, file_path, selected_irs)
                 
-                print("Running independent Validation Engine...")
+                log_to_db(db, job_id, "Running independent Validation Engine...")
                 validation_result = ValidationEngine.validate(file_path, output_file, selected_irs)
                 if validation_result.passed:
-                    print("Validation PASSED. Generating output profile...")
+                    log_to_db(db, job_id, "Validation PASSED. Generating output profile...")
                     validation_passed = True
                     try:
                         out_profile = PolarsProfiler.profile(output_file)
                         job.output_schema_json = out_profile
                     except Exception as e:
-                        print(f"Failed to profile output file: {e}")
+                        log_to_db(db, job_id, f"Failed to profile output file: {e}")
                     job.state = "COMPLETED"
+                    job.applied_operations = job.applied_operations + [f"Applied: {ir.operation.value} to {ir.target_column}" for ir in selected_irs]
                     break
                 else:
-                    print(f"Validation FAILED: {validation_result.violations}")
+                    log_to_db(db, job_id, f"Validation FAILED: {validation_result.violations}")
                     retry_count += 1
                     if retry_count <= max_retries:
-                        print(f"Triggering Retry {retry_count}/{max_retries}. Banning failed candidates...")
+                        log_to_db(db, job_id, f"Triggering Retry {retry_count}/{max_retries}. Banning failed candidates...")
                         # MVP sim: mark FAILED since mock agent can't replan dynamically.
                         job.state = "FAILED"
                         break
                     else:
-                        print("Max retries exceeded.")
+                        log_to_db(db, job_id, "Max retries exceeded.")
                         job.state = "FAILED"
                         break
                         
@@ -188,7 +199,7 @@ def task_profile_dataset(dataset_id: str, file_path: str):
             
         db.close()
         
-        print(f"Finished profiling {dataset_id}. Detected {len(detected_issues)} issues.")
+        log_to_db(db, job_id, f"Finished profiling {dataset_id}. Detected {len(detected_issues)} issues.")
         
         # Display detailed results in terminal
         print("\n--- PROFILING RESULTS ---")
@@ -252,40 +263,40 @@ def task_execute_job(dataset_id: str, job_id: str):
                     selected_irs.append(ir)
                     
             if not selected_irs:
-                print("No eligible candidates remaining to execute.")
+                log_to_db(db, job_id, "No eligible candidates remaining to execute.")
                 break
                 
-            print(f"Executing approved AI strategies (Attempt {retry_count + 1})...")
+            log_to_db(db, job_id, f"Executing approved AI strategies (Attempt {retry_count + 1})...")
             output_file = SandboxExecutor.execute(dataset_id, file_path, selected_irs)
-            print(f"Dataset successfully cleaned and saved to: {output_file}")
+            log_to_db(db, job_id, f"Dataset successfully cleaned and saved to: {output_file}")
             
             # --- VALIDATION TRACK ---
-            print("Running independent Validation Engine...")
+            log_to_db(db, job_id, "Running independent Validation Engine...")
             validation_result = ValidationEngine.validate(file_path, output_file, selected_irs)
             
             if validation_result.passed:
-                print("Validation PASSED. Generating output profile...")
+                log_to_db(db, job_id, "Validation PASSED. Generating output profile...")
                 validation_passed = True
                 try:
                     from app.services.profiler import PolarsProfiler
                     out_profile = PolarsProfiler.profile(output_file)
                     job.output_schema_json = out_profile
                 except Exception as e:
-                    print(f"Failed to profile output file: {e}")
+                    log_to_db(db, job_id, f"Failed to profile output file: {e}")
                 job.state = "COMPLETED"
                 break
             else:
-                print(f"Validation FAILED: {validation_result.violations}")
+                log_to_db(db, job_id, f"Validation FAILED: {validation_result.violations}")
                 retry_count += 1
                 if retry_count <= max_retries:
-                    print(f"Triggering Retry {retry_count}/{max_retries}. Banning failed candidates...")
+                    log_to_db(db, job_id, f"Triggering Retry {retry_count}/{max_retries}. Banning failed candidates...")
                     # For MVP, simply fail the job if validation fails. 
                     # True replanning with the MockAgent requires generating new IRs.
                     # We will mark it as FAILED here to simulate safe termination on failure.
                     job.state = "FAILED"
                     break
                 else:
-                    print("Max retries exceeded.")
+                    log_to_db(db, job_id, "Max retries exceeded.")
                     job.state = "FAILED"
                     break
             

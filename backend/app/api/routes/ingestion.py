@@ -115,10 +115,17 @@ def get_dataset_results(dataset_id: str, db: Session = Depends(get_db)):
         "job": {
             "job_id": job.job_id if job else None,
             "state": job.state if job else "PENDING",
-            "output_schema_json": job.output_schema_json if job else None
+            "output_schema_json": job.output_schema_json if job else None,
+            "applied_operations": job.applied_operations if job else []
         },
         "issues": issues_payload
     }
+
+@router.get("/{dataset_id}/jobs/{job_id}/logs")
+def get_job_logs(dataset_id: str, job_id: str, db: Session = Depends(get_db)):
+    from app.db.models import JobLog
+    logs = db.query(JobLog).filter(JobLog.job_id == job_id).order_by(JobLog.timestamp).all()
+    return {"logs": [{"timestamp": log.timestamp, "message": log.message} for log in logs]}
 
 @router.get("/{dataset_id}/download")
 def download_dataset(dataset_id: str):

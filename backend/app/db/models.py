@@ -38,6 +38,15 @@ class Job(Base):
     llm_calls = Column(Integer, default=0)
     tokens_used = Column(Integer, default=0)
     output_schema_json = Column(JSON, nullable=True)
+    applied_operations = Column(JSON, default=list)
+
+class JobLog(Base):
+    __tablename__ = "job_logs"
+    
+    log_id = Column(String(36), primary_key=True, default=generate_uuid)
+    job_id = Column(String(36), ForeignKey("jobs.job_id"), nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    message = Column(Text, nullable=False)
 
 class Issue(Base):
     __tablename__ = "issues"

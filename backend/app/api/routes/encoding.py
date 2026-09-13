@@ -177,6 +177,15 @@ async def apply_encoding(dataset_id: str, request: EncodeApplyRequest, db = Depe
                 
         encoded_path = os.path.join("local_storage/transformed", f"{dataset_id}_encoded.csv")
         lf.sink_csv(encoded_path)
+        
+        # Track applied operations in Job
+        from app.db.models import Job
+        job = db.query(Job).filter(Job.dataset_id == dataset_id).first()
+        if job:
+            new_ops = [f"Encoded: {cand['operation']} on '{cand['target_column']}'" for cand in candidates]
+            job.applied_operations = job.applied_operations + new_ops
+            db.commit()
+            
     except Exception as e:
         import traceback
         traceback.print_exc()
