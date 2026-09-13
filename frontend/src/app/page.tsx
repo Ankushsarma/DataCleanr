@@ -16,6 +16,19 @@ export default function Home() {
   const [encodingColumns, setEncodingColumns] = useState<any[]>([]);
   const [targetColumn, setTargetColumn] = useState<string>('');
   const [encodingStatus, setEncodingStatus] = useState('');
+  const [isBalancingModalOpen, setIsBalancingModalOpen] = useState(false);
+  const [balanceStatus, setBalanceStatus] = useState('');
+  const [hasBalancedData, setHasBalancedData] = useState(false);
+  const [isScalingModalOpen, setIsScalingModalOpen] = useState(false);
+  const [scaleMethod, setScaleMethod] = useState('Standard');
+  const [scaleStatus, setScaleStatus] = useState('');
+  const [hasScaledData, setHasScaledData] = useState(false);
+  
+  const [isTransformModalOpen, setIsTransformModalOpen] = useState(false);
+  const [transformMethod, setTransformMethod] = useState('Log1p');
+  const [transformStatus, setTransformStatus] = useState('');
+  const [hasTransformedData, setHasTransformedData] = useState(false);
+
   const [hasEncodedData, setHasEncodedData] = useState(false);
   const [hasPromptedEncoding, setHasPromptedEncoding] = useState(false);
   const [jobLogs, setJobLogs] = useState<any[]>([]);
@@ -110,7 +123,7 @@ export default function Home() {
     };
     
     fetchEda();
-  }, [datasetId, datasetResults, viewMode, hasEncodedData]);
+  }, [datasetId, datasetResults, viewMode, hasEncodedData, hasTransformedData, hasScaledData, hasBalancedData]);
 
   const approveJob = async () => {
     if (!datasetId || !datasetResults?.job?.job_id) return;
@@ -168,6 +181,79 @@ export default function Home() {
     } catch (e) {
       setEncodingStatus('Error connecting to backend.');
     }
+  };
+
+
+  const handleBalance = async () => {
+    if (!datasetId || !targetColumn) return;
+    setBalanceStatus('Balancing dataset with SMOTE... please wait.');
+    
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/datasets/${datasetId}/balance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_column: targetColumn })
+      });
+      
+      if (res.ok) {
+        setHasBalancedData(true);
+        setIsBalancingModalOpen(false);
+        setBalanceStatus('');
+        // Trigger a re-fetch of EDA
+        setViewMode('BEFORE'); 
+        setTimeout(() => setViewMode('AFTER'), 100);
+      } else {
+        const errorData = await res.json();
+        setBalanceStatus(`Error: ${errorData.detail}`);
+      }
+    } catch (e) {
+      setBalanceStatus('Error connecting to backend.');
+    }
+  };
+
+
+  const handleScale = async () => {
+    if (!datasetId || encodingColumns.length === 0) return;
+    setScaleStatus('Scaling dataset... please wait.');
+    try {
+      const targetCols = encodingColumns.map(c => c.column);
+      const res = await fetch(`http://localhost:8000/api/v1/datasets/${datasetId}/scale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_columns: targetCols, method: scaleMethod })
+      });
+      if (res.ok) {
+        setHasScaledData(true);
+        setIsScalingModalOpen(false);
+        setScaleStatus('');
+        setViewMode('BEFORE'); setTimeout(() => setViewMode('AFTER'), 100);
+      } else {
+        const errorData = await res.json();
+        setScaleStatus(`Error: ${errorData.detail}`);
+      }
+    } catch (e) { setScaleStatus('Error connecting to backend.'); }
+  };
+
+  const handleTransform = async () => {
+    if (!datasetId || encodingColumns.length === 0) return;
+    setTransformStatus('Transforming dataset... please wait.');
+    try {
+      const targetCols = encodingColumns.map(c => c.column);
+      const res = await fetch(`http://localhost:8000/api/v1/datasets/${datasetId}/transform`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_columns: targetCols, method: transformMethod })
+      });
+      if (res.ok) {
+        setHasTransformedData(true);
+        setIsTransformModalOpen(false);
+        setTransformStatus('');
+        setViewMode('BEFORE'); setTimeout(() => setViewMode('AFTER'), 100);
+      } else {
+        const errorData = await res.json();
+        setTransformStatus(`Error: ${errorData.detail}`);
+      }
+    } catch (e) { setTransformStatus('Error connecting to backend.'); }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -731,6 +817,148 @@ export default function Home() {
         </div>
       )}
 
+
+
+      {/* Transformation Modal */}
+      {isTransformModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Transform Numerical Data</h3>
+            <p className="text-slate-600 mb-6 text-sm">
+              Apply a mathematical transformation to reduce skewness and stabilize variance across numerical features.
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Transformation Method</label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800"
+                value={transformMethod}
+                onChange={(e) => setTransformMethod(e.target.value)}
+              >
+                <option value="Log1p">Log Transformation (Log1p) - Best for right-skewed data</option>
+                <option value="Sqrt">Square Root - Best for counts</option>
+              </select>
+            </div>
+
+            {transformStatus && (
+              <div className="mb-6 p-4 bg-slate-100 rounded-xl text-slate-700 text-sm font-medium animate-pulse">
+                {transformStatus}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button
+                onClick={() => setIsTransformModalOpen(false)}
+                className="px-6 py-2.5 rounded-full font-medium text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTransform}
+                disabled={!!transformStatus}
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white rounded-full font-medium"
+              >
+                Apply Transform
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scaling Modal */}
+      {isScalingModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Scale Numerical Data</h3>
+            <p className="text-slate-600 mb-6 text-sm">
+              Bring all numerical features into the same range or distribution to optimize machine learning performance.
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Scaling Method</label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800"
+                value={scaleMethod}
+                onChange={(e) => setScaleMethod(e.target.value)}
+              >
+                <option value="Standard">Standardization (Z-Score) - Mean 0, Std 1</option>
+                <option value="MinMax">Normalization (Min-Max) - Bounds [0, 1]</option>
+              </select>
+            </div>
+
+            {scaleStatus && (
+              <div className="mb-6 p-4 bg-slate-100 rounded-xl text-slate-700 text-sm font-medium animate-pulse">
+                {scaleStatus}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button
+                onClick={() => setIsScalingModalOpen(false)}
+                className="px-6 py-2.5 rounded-full font-medium text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleScale}
+                disabled={!!scaleStatus}
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white rounded-full font-medium"
+              >
+                Apply Scaling
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Balancing Modal */}
+      {isBalancingModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Balance Dataset (SMOTE)</h3>
+            <p className="text-slate-600 mb-6 text-sm">
+              Select the numeric target class you wish to balance. SMOTE will generate synthetic minority samples.
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Target Column</label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                value={targetColumn}
+                onChange={(e) => setTargetColumn(e.target.value)}
+              >
+                <option value="">-- Select Target Column --</option>
+                {encodingColumns.map((col: any) => (
+                  <option key={col.column} value={col.column}>{col.column}</option>
+                ))}
+              </select>
+            </div>
+
+            {balanceStatus && (
+              <div className="mb-6 p-4 bg-slate-100 rounded-xl text-slate-700 text-sm font-medium animate-pulse">
+                {balanceStatus}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button
+                onClick={() => setIsBalancingModalOpen(false)}
+                className="px-6 py-2.5 rounded-full font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBalance}
+                disabled={!targetColumn || !!balanceStatus}
+                className="px-6 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white rounded-full font-medium transition-colors shadow-lg shadow-orange-500/25"
+              >
+                Apply SMOTE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Encoding Modal */}
       {isEncodingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -779,7 +1007,7 @@ export default function Home() {
               <div className="mt-8 pt-6 border-t border-slate-200 flex justify-end">
                 <button
                   onClick={applyEncoding}
-                  disabled={encodingColumns.length === 0}
+                  disabled={encodingColumns.length === 0 || hasEncodedData}
                   className="px-8 py-3 bg-orange-500 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-full font-medium transition-colors shadow-lg shadow-orange-500/25"
                 >
                   Generate Encodings

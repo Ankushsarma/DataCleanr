@@ -159,6 +159,37 @@ class IssueDetector:
                             "castability_pct": castability_pct
                         }
                     ))
+            
+            # Rule 7: Inconsistent Casing (Heuristic)
+            if stats.get("dtype") == "String" and file_path:
+                try:
+                    import polars as pl
+                    df = pl.read_csv(file_path, null_values=["NA", "null", ""])
+                    if col_name in df.columns:
+                        unique_vals = df[col_name].drop_nulls().unique().to_list()
+                        if 1 < len(unique_vals) <= 50:
+                            # If lowercasing reduces the number of unique values, we have an inconsistency
+                            lower_vals = set([str(x).lower().strip() for x in unique_vals])
+                            if len(lower_vals) < len(unique_vals):
+                                issues.append(DetectedIssue(
+                                    column=col_name,
+                                    issue_type="INCONSISTENT_CASING",
+                                    evidence={"unique_count": len(unique_vals), "lowered_count": len(lower_vals)}
+                                ))
+                except Exception as e:
+                    pass
+            
+            # Rule 8: Invalid Logical Values (Negative Age/Price)
+            if stats.get("dtype") in ["Int64", "Float64", "Int32", "Float32"]:
+                c_min = stats.get("min")
+                if c_min is not None and c_min < 0:
+                    col_lower = col_name.lower()
+                    if any(x in col_lower for x in ["age", "price", "cost", "revenue", "count", "amount"]):
+                        issues.append(DetectedIssue(
+                            column=col_name,
+                            issue_type="INVALID_LOGICAL_VALUE",
+                            evidence={"min_value": c_min, "reason": "Negative value in logical positive column"}
+                        ))
                         
         # Dataset level rules
         if file_path:

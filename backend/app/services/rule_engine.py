@@ -159,6 +159,26 @@ class RuleBasedStrategyEngine:
                 ),
             ]
 
+        # ── INCONSISTENT CASING ────────────────────────────────────────
+        if issue_type == "INCONSISTENT_CASING":
+            return [
+                _build_ir(
+                    issue_id, issue_column, "TEXT_STANDARDIZE",
+                    f"Column '{issue_column}' contains inconsistent casing and padding. Converting to Title Case and trimming whitespace.",
+                    risk_level="LOW"
+                ),
+            ]
+            
+        # ── INVALID LOGICAL VALUE ──────────────────────────────────────
+        if issue_type == "INVALID_LOGICAL_VALUE":
+            return [
+                _build_ir(
+                    issue_id, issue_column, "NULLIFY_NEGATIVE",
+                    f"Column '{issue_column}' contains negative values which is logically invalid for this metric. Replacing with null.",
+                    risk_level="MEDIUM"
+                ),
+            ]
+
         # ── POTENTIAL ID / HIGH-CARDINALITY TEXT ───────────────────────
         if issue_type in ("POTENTIAL_ID_OR_TEXT", "SINGLE_DOMINANT_CATEGORY"):
             return [

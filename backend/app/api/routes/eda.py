@@ -31,10 +31,16 @@ def get_eda(dataset_id: str, state: str = "raw", db = Depends(get_db)):
     elif state == "cleaned":
         file_path = os.path.join("local_storage/transformed", f"{dataset_id}_cleaned.csv")
     elif state == "encoded":
-        # Check if a balanced dataset exists first, otherwise use encoded
-        balanced_path = os.path.join("local_storage/transformed", f"{dataset_id}_balanced.csv")
-        encoded_path = os.path.join("local_storage/transformed", f"{dataset_id}_encoded.csv")
-        file_path = balanced_path if os.path.exists(balanced_path) else encoded_path
+        stages = ["balanced", "transformed", "scaled", "encoded"]
+        file_path = None
+        for stage in stages:
+            path = os.path.join("local_storage/transformed", f"{dataset_id}_{stage}.csv")
+            if os.path.exists(path):
+                file_path = path
+                break
+        
+        if not file_path:
+            raise HTTPException(status_code=400, detail="No processed data found.")
     else:
         raise HTTPException(status_code=400, detail="Invalid state parameter. Use 'raw', 'cleaned', or 'encoded'.")
         

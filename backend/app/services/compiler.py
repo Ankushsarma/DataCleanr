@@ -158,6 +158,22 @@ def compile_normalize_categorical(ir: TransformationIR, lf: pl.LazyFrame) -> pl.
         pl.col(ir.target_column).cast(pl.Utf8).str.to_lowercase().str.strip_chars()
     )
 
+def compile_text_standardize(ir: TransformationIR, lf: pl.LazyFrame) -> pl.LazyFrame:
+    print(f"[Compiler] Compiling TEXT_STANDARDIZE on column '{ir.target_column}'.")
+    # Titlecase and trim to resolve M, m, male, Male -> Male
+    return lf.with_columns(
+        pl.col(ir.target_column).cast(pl.Utf8).str.to_titlecase().str.strip_chars()
+    )
+
+def compile_nullify_negative(ir: TransformationIR, lf: pl.LazyFrame) -> pl.LazyFrame:
+    print(f"[Compiler] Compiling NULLIFY_NEGATIVE on column '{ir.target_column}'.")
+    return lf.with_columns(
+        pl.when(pl.col(ir.target_column) < 0)
+        .then(None)
+        .otherwise(pl.col(ir.target_column))
+        .alias(ir.target_column)
+    )
+
 def compile_standardize_date_format(ir: TransformationIR, lf: pl.LazyFrame) -> pl.LazyFrame:
     format = ir.parameters.get("format", "%Y-%m-%d")
     print(f"[Compiler] Compiling STANDARDIZE_DATE_FORMAT on column '{ir.target_column}' to {format}.")
@@ -232,6 +248,8 @@ COMPILER_REGISTRY: Dict[str, Callable[[TransformationIR, pl.LazyFrame], pl.LazyF
     "LABEL_ENCODE": compile_label_encode,
     "ORDINAL_ENCODE": compile_ordinal_encode,
     "TARGET_ENCODE": compile_target_encode,
+    "TEXT_STANDARDIZE": compile_text_standardize,
+    "NULLIFY_NEGATIVE": compile_nullify_negative,
     # Additional operations would be mapped here
 }
 
