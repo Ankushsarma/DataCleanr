@@ -5,13 +5,18 @@ import uuid
 
 def log_to_db(db, job_id, message):
     from app.db.models import JobLog
-    print(message)
+    try:
+        # Encode to ASCII safely so Windows console doesn't crash on Unicode characters
+        safe_message = message.encode('ascii', errors='replace').decode('ascii')
+        print(safe_message)
+    except Exception:
+        pass
     if job_id and db:
         try:
             db.add(JobLog(job_id=job_id, message=message))
             db.commit()
         except Exception as e:
-            print(f"Failed to save log: {e}")
+            pass
 
 # A simple local executor for background tasks without Celery/Redis
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)

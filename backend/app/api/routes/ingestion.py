@@ -129,8 +129,17 @@ def get_job_logs(dataset_id: str, job_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{dataset_id}/download")
 def download_dataset(dataset_id: str):
-    file_path = os.path.join("local_storage/transformed", f"{dataset_id}_cleaned.csv")
-    if not os.path.exists(file_path):
+    balanced_path = os.path.join("local_storage/transformed", f"{dataset_id}_balanced.csv")
+    encoded_path = os.path.join("local_storage/transformed", f"{dataset_id}_encoded.csv")
+    cleaned_path = os.path.join("local_storage/transformed", f"{dataset_id}_cleaned.csv")
+    
+    if os.path.exists(balanced_path):
+        file_path = balanced_path
+    elif os.path.exists(encoded_path):
+        file_path = encoded_path
+    elif os.path.exists(cleaned_path):
+        file_path = cleaned_path
+    else:
         raise HTTPException(status_code=404, detail="Cleaned dataset not found. Job may not be completed yet.")
     
     return FileResponse(
